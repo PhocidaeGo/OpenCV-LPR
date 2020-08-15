@@ -10,7 +10,7 @@
 using namespace cv;
 using namespace std;
 
-//思路一：灰度图直接二值化
+//灰度图直接二值化
 Mat Binary(Mat src)
 {
     Mat img_grey;
@@ -39,6 +39,7 @@ Mat Adapt_Binary(Mat src)
 */
 
 /*思路二：由于车牌底色是固定的(蓝色、黄色、绿色)，是否可以只提取该具有特定颜色的连通区域
+  TODO:可以考虑结合Sabel算子
   本方案的难点在于车牌的HSV颜色难以确定,即使都是蓝牌，在不同的相机与光线下也有不同的色彩，可考虑更换色域空间或者使用平均值和方差求出合适的色域再修改像素*/
 Mat colorFilter(Mat src)
 {
@@ -113,9 +114,54 @@ Mat cutImg(Mat src, vector<vector<Point>> rectContours)
     //裁剪出车牌
     int width=xmax-xmin;
     int height=ymax-ymin;
-    Rect lp (xmin,ymin,width,height);
+    Rect lp (xmin+3,ymin+8,width-5,height-5);
     Mat LP=src(lp);
     return LP;
+}
+
+Mat rivetFilter(Mat src)//去除车牌中的铆钉
+{
+
+}
+
+int getColSum(Mat src, int col)//计算每列中非零像素的数量
+{
+    int sum=0;
+    for (int i = 0; i < src.rows; i++)
+    {
+        sum += src.at<uchar>(i, col);
+    }
+    return sum;
+}
+
+vector<Rect> singleChar(Mat src)
+{
+    int col[15],edge[6];
+    int index=0;
+    int height=src.cols;
+    int thr=0.75*height;
+    for (int i = 0.1*height; i < height; i++)
+    {
+        if(getColSum(src,i)<0.2*src.rows)
+        {
+            col[index]=i;
+            index++;
+        }
+    }
+    edge[0]=col[0];
+    for (int i = 1; i < index; i++)
+    {
+        if(col[i+1]-col[i]>thr) edge[i]=col[i];
+    }
+    
+    vector<Rect> singleChar;
+    for (int i = 0; i < 6; i++)//cut the LP img
+    {
+        int width=edge[i+1]-edge[i];
+        Rect single=Rect(edge[i],0,width,height);
+        singleChar[i]=single;
+    }
+    return singleChar;
 }
 
 int main()
@@ -127,22 +173,21 @@ int main()
 
     Mat color_bin=colorFilter(img);
     Mat rectArea=Binary(color_bin);//TODO:colorFilter已经是二值化过程，为何此处还需要二值化？
-    imshow("rectArea",rectArea);
+    //imshow("rectArea",rectArea);
 
     vector<vector<Point>> rectContours(1);
     rectContours=rectC(rectArea);
     
     Mat rect_contour=Mat::zeros(rectArea.rows,rectArea.cols,CV_8U);
     drawContours(rect_contour,rectContours,-1,Scalar::all(255));
-    imshow("contours",rect_contour);
+    //imshow("contours",rect_contour);
     
     
     Mat LP=cutImg(imgC,rectContours);    
     //imshow("LP",LP);
     
     Mat LP_bin=Binary(LP);
-    imshow("LP_bin",LP_bin);
-    
+    imshow("LP_bin",LP_bin);    
 
     /*
     Mat img_canny;
