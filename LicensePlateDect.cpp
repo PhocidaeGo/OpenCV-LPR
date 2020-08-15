@@ -44,8 +44,9 @@ Mat Adapt_Binary(Mat src)
 Mat colorFilter(Mat src)
 {
     Mat img=src,img_hsv;
-
-    cvtColor(src,img_hsv,CV_BGR2HSV); //转为HSV空间，方便提取颜色
+    Mat blur;
+    medianBlur(src,blur,7);
+    cvtColor(blur,img_hsv,CV_BGR2HSV); //转为HSV空间，方便提取颜色
     for (int i = 0; i < img_hsv.cols; i++)
     {
         for (int j = 0; j < img_hsv.rows; j++)
@@ -53,7 +54,7 @@ Mat colorFilter(Mat src)
             int h=img_hsv.at<Vec3b>(j,i)[0];        
             int s=img_hsv.at<Vec3b>(j,i)[1];
             int v=img_hsv.at<Vec3b>(j,i)[2];
-            if(h>=80 && h<=115 && s>=50 && s<=240 && v>=50 && v<=240)
+            if(h>=100 && h<=120 && s>=80 && s<=240 && v>=80 && v<=240)
             {
                 img.at<Vec3b>(j,i)=Vec3b(0,0,0);
             }
@@ -71,19 +72,24 @@ vector<vector<Point>> rectC(Mat src)
     vector<vector<Point>> contours;
     findContours(src,contours,noArray(),RETR_LIST,CHAIN_APPROX_SIMPLE);
     //提取除边框外面积最大的轮廓
-    int maxArea=0;
+    int maxArea=-1;
     for (int i = 0; i < contours.size(); i++)
     {
-        if(contourArea(contours[i])>contourArea(contours[maxArea]) && contourArea(contours[i])<0.75*src.rows*src.cols)//0.75作为系数可以更改，但不能为1
+        if(contourArea(contours[i])<0.5*src.rows*src.cols && contourArea(contours[i])>0.005*src.rows*src.cols && contourArea(contours[i])>contourArea(contours[maxArea]))//0.5作为系数可以更改，但不能为1
         {
             maxArea=i;
         }
     }
     //近似出矩形
     vector<vector<Point>> rectContours(1);    
-    approxPolyDP(contours[maxArea],rectContours[0],20,true);//20是近似截止的阈值，越大计算量越小且可以滤去无用的边，但要注意src中车牌的大小，以免损失重要的边 
+    approxPolyDP(contours[maxArea],rectContours[0],10,true);//10是近似截止的阈值，越大计算量越小且可以滤去无用的边，但要注意src中车牌的大小，以免损失重要的边 
                                                          //TODO:可以考虑将该值设置为随总边长变化(我国车牌的长宽比是固定的，可以通过计算边长得到车牌的宽，从而让该值不超过车牌的宽)
-    return rectContours;
+    if(maxArea>=0)
+    {
+        return rectContours;
+    }
+     
+    
 }
     
 Mat cutImg(Mat src, vector<vector<Point>> rectContours)
@@ -103,7 +109,6 @@ Mat cutImg(Mat src, vector<vector<Point>> rectContours)
         if(rectContours[0][i].x<=xmin && rectContours[0][i].x!=0) xmin=rectContours[0][i].x;
         if(rectContours[0][i].y<=ymin && rectContours[0][i].y!=0) ymin=rectContours[0][i].y;
     }
-    cout<<xmin<<" "<<ymin<<" "<<xmax<<" "<<ymax<<" ";
     //裁剪出车牌
     int width=xmax-xmin;
     int height=ymax-ymin;
@@ -115,22 +120,21 @@ Mat cutImg(Mat src, vector<vector<Point>> rectContours)
 int main()
 {
 
-    Mat img=imread("C:/Users/25793/Desktop/OpenCV/LicensePlateDetection/test.jpg",1);
-    Mat imgC=imread("C:/Users/25793/Desktop/OpenCV/LicensePlateDetection/test.jpg",1);
+    Mat img=imread("C:/Users/25793/Desktop/OpenCV/LicensePlateDetection/negative/test.jpg",1);
+    Mat imgC=imread("C:/Users/25793/Desktop/OpenCV/LicensePlateDetection/negative/test.jpg",1);
     imshow("oringin",img);    
 
     Mat color_bin=colorFilter(img);
     Mat rectArea=Binary(color_bin);//TODO:colorFilter已经是二值化过程，为何此处还需要二值化？
-    //imshow("rectArea",rectArea);
+    imshow("rectArea",rectArea);
 
     vector<vector<Point>> rectContours(1);
     rectContours=rectC(rectArea);
     Mat rect_contour=Mat::zeros(rectArea.rows,rectArea.cols,CV_8U);
     drawContours(rect_contour,rectContours,-1,Scalar::all(255));
-    //imshow("contours",rect_contour);
+    imshow("contours",rect_contour);
     
-    Mat LP=cutImg(imgC,rectContours);
-    
+    Mat LP=cutImg(imgC,rectContours);    
     imshow("LP",LP);
 
     /*
