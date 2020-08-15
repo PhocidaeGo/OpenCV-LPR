@@ -16,7 +16,6 @@ Mat Binary(Mat src)
     Mat img_grey;
     cvtColor(src,img_grey,COLOR_BGR2GRAY);//读取灰度图
     //imshow("img_grey",img_grey);
-    
     Mat img_o;
     int thr=150;
     threshold(img_grey, img_o, 150, 255, CV_THRESH_OTSU);//threshold(img_grey, img, 150, 255, CV_THRESH_BINARY);
@@ -44,9 +43,13 @@ Mat Adapt_Binary(Mat src)
 Mat colorFilter(Mat src)
 {
     Mat img=src,img_hsv;
+    /*原本使用medienBlur来获得更好的矩形轮廓，但容易受到车牌周围反光物体的干扰，现改用膨胀/腐蚀
     Mat blur;
-    medianBlur(src,blur,7);
-    cvtColor(blur,img_hsv,CV_BGR2HSV); //转为HSV空间，方便提取颜色
+    medianBlur(src,blur,13);
+    */
+    Mat Erode;
+    erode(src, Erode, 7);//加入膨胀算法，使轮廓更完整
+    cvtColor(Erode,img_hsv,CV_BGR2HSV); //转为HSV空间，方便提取颜色
     for (int i = 0; i < img_hsv.cols; i++)
     {
         for (int j = 0; j < img_hsv.rows; j++)
@@ -72,10 +75,10 @@ vector<vector<Point>> rectC(Mat src)
     vector<vector<Point>> contours;
     findContours(src,contours,noArray(),RETR_LIST,CHAIN_APPROX_SIMPLE);
     //提取除边框外面积最大的轮廓
-    int maxArea=-1;
+    int maxArea=0;
     for (int i = 0; i < contours.size(); i++)
     {
-        if(contourArea(contours[i])<0.5*src.rows*src.cols && contourArea(contours[i])>0.005*src.rows*src.cols && contourArea(contours[i])>contourArea(contours[maxArea]))//0.5作为系数可以更改，但不能为1
+        if(contourArea(contours[i])<0.6*src.rows*src.cols && contourArea(contours[i])>0.005*src.rows*src.cols && contourArea(contours[i])>contourArea(contours[maxArea]))//0.6作为系数可以更改，但不能为1
         {
             maxArea=i;
         }
@@ -84,10 +87,8 @@ vector<vector<Point>> rectC(Mat src)
     vector<vector<Point>> rectContours(1);    
     approxPolyDP(contours[maxArea],rectContours[0],10,true);//10是近似截止的阈值，越大计算量越小且可以滤去无用的边，但要注意src中车牌的大小，以免损失重要的边 
                                                          //TODO:可以考虑将该值设置为随总边长变化(我国车牌的长宽比是固定的，可以通过计算边长得到车牌的宽，从而让该值不超过车牌的宽)
-    if(maxArea>=0)
-    {
-        return rectContours;
-    }
+    return rectContours;
+    
      
     
 }
@@ -120,8 +121,8 @@ Mat cutImg(Mat src, vector<vector<Point>> rectContours)
 int main()
 {
 
-    Mat img=imread("C:/Users/25793/Desktop/OpenCV/LicensePlateDetection/negative/test.jpg",1);
-    Mat imgC=imread("C:/Users/25793/Desktop/OpenCV/LicensePlateDetection/negative/test.jpg",1);
+    Mat img=imread("C:/Users/25793/Desktop/OpenCV/LicensePlateDetection/positive/4.jpg",1);//TODO:必须重视检查文件路径！！！
+    Mat imgC=imread("C:/Users/25793/Desktop/OpenCV/LicensePlateDetection/positive/4.jpg",1);
     imshow("oringin",img);    
 
     Mat color_bin=colorFilter(img);
@@ -130,17 +131,18 @@ int main()
 
     vector<vector<Point>> rectContours(1);
     rectContours=rectC(rectArea);
+    
     Mat rect_contour=Mat::zeros(rectArea.rows,rectArea.cols,CV_8U);
     drawContours(rect_contour,rectContours,-1,Scalar::all(255));
     imshow("contours",rect_contour);
     
+    
     Mat LP=cutImg(imgC,rectContours);    
-    imshow("LP",LP);
-
-    /*
-    Mat img_bin=Binary(imgC);
-    imshow("img_bin",img_bin);
-    */
+    //imshow("LP",LP);
+    
+    Mat LP_bin=Binary(LP);
+    imshow("LP_bin",LP_bin);
+    
 
     /*
     Mat img_canny;
